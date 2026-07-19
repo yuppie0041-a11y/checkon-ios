@@ -44,6 +44,8 @@ jobs:
             -configuration Release \
             -archivePath "$RUNNER_TEMP/checkon.xcarchive" \
             CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="MindSafe365 Checkon AppStore" \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}
 
       - name: Export IPA
