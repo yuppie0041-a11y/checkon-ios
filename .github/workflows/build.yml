@@ -44,7 +44,9 @@ jobs:
             -workspace "마음안전365 체크온.xcworkspace" \
             -scheme "마음안전365 체크온" \
             -configuration Release \
-            -archivePath "$RUNNER_TEMP/checkon.xcarchive"
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/checkon.xcarchive" \
+            ONLY_ACTIVE_ARCH=NO
 
       - name: Export IPA
         run: |
