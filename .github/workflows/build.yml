@@ -141,7 +141,7 @@ jobs:
             echo "embedded.mobileprovision NOT FOUND"
           fi
 
-      - name: Re-sign unsigned nested bundles (fix Firebase privacy bundles)
+      - name: Sign nested bundles in archive (before exportArchive)
         run: |
           security unlock-keychain -p "" build.keychain
           security default-keychain -s build.keychain
@@ -150,39 +150,25 @@ jobs:
           APP=$(find "$RUNNER_TEMP/checkon.xcarchive/Products/Applications" -name "*.app" -maxdepth 1 | head -1)
           echo "App: $APP"
 
-          # entitlements 추출
-          codesign -d --entitlements :"$RUNNER_TEMP/entitlements.plist" "$APP" 2>/dev/null || true
+          echo ""
+          echo "=== 앱 번들에서 불필요한 Entitlements 폴더 제거 ==="
+          if [ -d "$APP/Entitlements" ]; then
+            rm -rf "$APP/Entitlements"
+            echo "제거 완료 (서명 설정 파일 - 앱에 포함되면 안 됨)"
+          else
+            echo "  (없음)"
+          fi
 
           echo ""
-          echo "=== 앱 루트 내용물 전체 (무엇이 있는지) ==="
-          ls -la "$APP" | head -60
-
-          echo ""
-          echo "=== 문제 유발 파일 확인 ==="
-          find "$APP" -name ".DS_Store" 2>/dev/null || echo "  .DS_Store 없음"
-          echo "심볼릭 링크:"
-          find "$APP" -type l 2>/dev/null || echo "  (없음)"
-
-          echo ""
-          echo "=== --deep 단일 패스 서명 ==="
-          codesign --force --deep --sign "$IDENTITY" --entitlements "$RUNNER_TEMP/entitlements.plist" --timestamp "$APP" 2>&1 | head -40
-
-          echo ""
-          echo "=== 서명 직후 verify (출력 전체 캡처) ==="
-          RC=0
-          codesign --verify --strict --verbose=4 "$APP" > /tmp/vout 2>&1 || RC=$?
-          echo "--- verify 종료코드: $RC ---"
-          echo "--- verify 출력 전체 ---"
-          cat /tmp/vout
-
-          echo ""
-          echo "=== Entitlements 폴더 내용 (앱 루트의 비정상 항목) ==="
-          find "$APP/Entitlements" -type f 2>/dev/null | head -10 || echo "  없음"
-          ls -laR "$APP/Entitlements" 2>/dev/null | head -20 || true
-
-          echo ""
-          echo "=== CodeResources에서 Entitlements 관련 항목 ==="
-          grep -A3 -i "entitlements" "$APP/_CodeSignature/CodeResources" 2>/dev/null | head -30 || echo "  없음"
+          echo "=== 중첩 번들 서명 (메인 앱은 exportArchive가 재서명) ==="
+          find "$APP" -name "*.bundle" | while read b; do
+            NAME=$(basename "$b")
+            if codesign --force --sign "$IDENTITY" --timestamp=none "$b" 2>/tmp/err; then
+              codesign --verify --strict "$b" 2>/dev/null && echo "  OK: $NAME" || echo "  WARN(검증실패): $NAME"
+            else
+              echo "  FAIL: $NAME - $(cat /tmp/err)"
+            fi
+          done
 
       - name: Show build errors (on failure)
         if: failure()
@@ -201,20 +187,32 @@ jobs:
         run: |
           mkdir -p ~/private_keys
           echo "$ASC_KEY_BASE64" | base64 --decode > ~/private_keys/AuthKey_${ASC_KEY_ID}.p8
-          ARCHIVE="$RUNNER_TEMP/checkon.xcarchive"
-          APP=$(find "$ARCHIVE/Products/Applications" -name "*.app" -maxdepth 1 | head -1)
-          echo "Building IPA from: $APP"
-          mkdir -p "$RUNNER_TEMP/Payload"
-          cp -r "$APP" "$RUNNER_TEMP/Payload/"
-          cd "$RUNNER_TEMP"
-          zip -qr "checkon.ipa" Payload/
-          echo "IPA size: $(du -sh checkon.ipa)"
-          TMPAPP=$(find "$RUNNER_TEMP/Payload" -name "*.app" | head -1)
-          echo "=== IPA codesign check ==="
-          codesign -dvvv "$TMPAPP" 2>&1 | grep -E "(Authority|Identifier|Team)" | head -8 || true
-          echo "=== Uploading ==="
-          xcrun altool --upload-app \
-            -f "$RUNNER_TEMP/checkon.ipa" \
-            --type ios \
-            --apiKey "$ASC_KEY_ID" \
-            --apiIssuer "$ASC_ISSUER_ID"
+          cat > ExportOptions.plist << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>destination</key>
+            <string>upload</string>
+            <key>teamID</key>
+            <string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>kr.co.mindsafe365.checkon</key>
+              <string>MindSafe365 Checkon AppStore</string>
+            </dict>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/checkon.xcarchive" \
+            -exportOptionsPlist ExportOptions.plist \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
