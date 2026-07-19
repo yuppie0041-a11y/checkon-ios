@@ -154,39 +154,26 @@ jobs:
           codesign -d --entitlements :"$RUNNER_TEMP/entitlements.plist" "$APP" 2>/dev/null || true
 
           echo ""
-          echo "=== 번들 구조 확인 (첫 번째 번들) ==="
-          FIRST=$(find "$APP" -name "*.bundle" | head -1)
-          echo "번들: $FIRST"
-          ls -la "$FIRST"
-          echo "Info.plist 존재? $([ -f "$FIRST/Info.plist" ] && echo YES || echo NO)"
+          echo "=== 문제 유발 파일 정리 (.DS_Store, 심볼릭 링크 확인) ==="
+          find "$APP" -name ".DS_Store" -print -delete 2>/dev/null || true
+          echo "심볼릭 링크:"
+          find "$APP" -type l 2>/dev/null | head -20 || echo "  (없음)"
 
           echo ""
-          echo "=== 중첩 번들 개별 서명 + 검증 ==="
-          FAILED=0
-          find "$APP" -name "*.bundle" | while read b; do
-            NAME=$(basename "$b")
-            if codesign --force --sign "$IDENTITY" --timestamp "$b" 2>/tmp/err; then
-              # 개별 검증
-              if codesign --verify --strict "$b" 2>/tmp/verr; then
-                echo "  ✅ $NAME 서명+검증 OK"
-              else
-                echo "  ⚠️ $NAME 서명됨 but 검증실패: $(cat /tmp/verr)"
-              fi
-            else
-              echo "  ❌ $NAME 서명실패: $(cat /tmp/err)"
-            fi
-          done
+          echo "=== --deep 단일 패스 서명 (전체 트리 원자적) ==="
+          codesign --force --deep --sign "$IDENTITY" --entitlements "$RUNNER_TEMP/entitlements.plist" --timestamp "$APP" 2>&1 | head -40
 
           echo ""
-          echo "=== 메인 앱 재서명 ==="
-          codesign --force --sign "$IDENTITY" --entitlements "$RUNNER_TEMP/entitlements.plist" --timestamp "$APP" 2>&1 || true
-
-          echo ""
-          echo "=== DEEP verify (verbose=4, 어느 리소스가 문제인지) ==="
-          codesign --verify --deep --strict --verbose=4 "$APP" 2>&1 | head -30 || true
-          echo ""
-          echo "=== 비-deep verify (메인 앱 seal만) ==="
-          codesign --verify --verbose=4 "$APP" 2>&1 | head -30 || true
+          echo "=== DEEP verify (verbose=4) ==="
+          if codesign --verify --deep --strict --verbose=4 "$APP" 2>&1 | tee /tmp/vlog; then
+            echo "DEEP VERIFY 통과 ✅✅✅"
+          else
+            echo "여전히 실패 ❌ — 상세:"
+            cat /tmp/vlog | head -30
+            echo ""
+            echo "=== CodeResources 내 files2 항목 (앞 30줄) ==="
+            /usr/bin/plutil -p "$APP/_CodeSignature/CodeResources" 2>/dev/null | grep -A2 "files2" | head -40 || true
+          fi
 
       - name: Show build errors (on failure)
         if: failure()
