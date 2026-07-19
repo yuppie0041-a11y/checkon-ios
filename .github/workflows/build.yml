@@ -146,20 +146,14 @@ jobs:
             <key>teamID</key>
             <string>${{ secrets.APPLE_TEAM_ID }}</string>
             <key>signingStyle</key>
-            <string>manual</string>
-            <key>signingCertificate</key>
-            <string>Apple Distribution</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>kr.co.mindsafe365.checkon</key>
-              <string>MindSafe365 Checkon AppStore</string>
-            </dict>
+            <string>automatic</string>
           </dict>
           </plist>
           PLIST
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/checkon.xcarchive" \
             -exportOptionsPlist ExportOptions.plist \
+            -allowProvisioningUpdates \
             -authenticationKeyPath "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
