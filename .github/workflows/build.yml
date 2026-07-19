@@ -57,6 +57,8 @@ jobs:
           security set-keychain-settings -lut 21600 build.keychain
           security import certificate.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          echo "=== Installed certificates ==="
+          security find-identity -v -p codesigning build.keychain
 
       - name: Install Provisioning Profile
         env:
@@ -97,6 +99,8 @@ jobs:
             <string>app-store-connect</string>
             <key>teamID</key>
             <string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
             <key>provisioningProfiles</key>
             <dict>
               <key>kr.co.mindsafe365.checkon</key>
