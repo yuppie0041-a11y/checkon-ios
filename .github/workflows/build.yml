@@ -47,7 +47,8 @@ jobs:
             config.build_settings['CODE_SIGN_IDENTITY'] = 'Apple Distribution'
             config.build_settings['PROVISIONING_PROFILE_SPECIFIER'] = 'MindSafe365 Checkon AppStore'
             config.build_settings['DEVELOPMENT_TEAM'] = 'UX7GD558S8'
-            puts "Signing configured for Release"
+            config.build_settings['PRODUCT_NAME'] = 'Checkon'
+            puts "Signing configured for Release (PRODUCT_NAME=Checkon)"
           end
           project.save
           puts "Project saved OK"
