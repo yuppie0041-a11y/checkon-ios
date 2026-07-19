@@ -73,24 +73,12 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           echo "$PP_BASE64" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/checkon.mobileprovision
           echo "=== Provisioning Profile Info ==="
-          python3 -c "
-import subprocess, plistlib, sys
-result = subprocess.run(['openssl','smime','-inform','der','-verify','-noverify','-in',
-  '/Users/runner/Library/MobileDevice/Provisioning Profiles/checkon.mobileprovision'],
-  capture_output=True)
-xml = result.stdout
-start = xml.find(b'<?xml')
-if start < 0: sys.exit('Cannot parse profile')
-plist = plistlib.loads(xml[start:])
-print('Name:', plist.get('Name'))
-print('TeamName:', plist.get('TeamName'))
-print('ProvisionsAllDevices:', plist.get('ProvisionsAllDevices','(not set)'))
-devices = plist.get('ProvisionedDevices')
-print('ProvisionedDevices:', len(devices) if devices else 'None (App Store or Enterprise)')
-ent = plist.get('Entitlements',{})
-print('get-task-allow:', ent.get('get-task-allow','(not set)'))
-print('ExpirationDate:', plist.get('ExpirationDate'))
-"
+          PP_FILE="$HOME/Library/MobileDevice/Provisioning Profiles/checkon.mobileprovision"
+          /usr/bin/security cms -D -i "$PP_FILE" 2>/dev/null \
+            | /usr/bin/plutil -p - 2>/dev/null \
+            | grep -E '"(Name|TeamName|ProvisionsAllDevices|ProvisionedDevices|get-task-allow|ExpirationDate)"' \
+            | head -20 \
+            || echo "Could not parse profile"
 
       - name: Build Archive
         run: |
