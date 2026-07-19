@@ -15,8 +15,8 @@ jobs:
 
       - name: Install CocoaPods
         run: |
-          sudo gem install cocoapods --no-document
-          pod install
+          sudo gem install cocoapods --no-document 2>&1 | tail -5
+          pod install --silent
 
       - name: Remove Pods aggregate framework from build phase
         run: |
@@ -74,6 +74,8 @@ jobs:
 
       - name: Build Archive
         run: |
+          CERT_NAME=$(security find-identity -v -p codesigning build.keychain | grep -m1 '"' | sed 's/.*"\(.*\)".*/\1/')
+          echo "Using certificate: $CERT_NAME"
           set -o pipefail
           xcodebuild archive \
             -workspace "마음안전365 체크온.xcworkspace" \
@@ -83,7 +85,7 @@ jobs:
             -sdk iphoneos \
             -archivePath "$RUNNER_TEMP/checkon.xcarchive" \
             CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
+            "CODE_SIGN_IDENTITY=$CERT_NAME" \
             DEVELOPMENT_TEAM=UX7GD558S8 \
             "PROVISIONING_PROFILE_SPECIFIER=MindSafe365 Checkon AppStore" \
             2>&1 | tee "$RUNNER_TEMP/build.log"
