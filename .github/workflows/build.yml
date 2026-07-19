@@ -134,26 +134,20 @@ jobs:
         run: |
           mkdir -p ~/private_keys
           echo "$ASC_KEY_BASE64" | base64 --decode > ~/private_keys/AuthKey_${ASC_KEY_ID}.p8
-          cat > ExportOptions.plist << 'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store-connect</string>
-            <key>destination</key>
-            <string>upload</string>
-            <key>teamID</key>
-            <string>${{ secrets.APPLE_TEAM_ID }}</string>
-            <key>signingStyle</key>
-            <string>automatic</string>
-          </dict>
-          </plist>
-          PLIST
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/checkon.xcarchive" \
-            -exportOptionsPlist ExportOptions.plist \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          ARCHIVE="$RUNNER_TEMP/checkon.xcarchive"
+          APP=$(find "$ARCHIVE/Products/Applications" -name "*.app" -maxdepth 1 | head -1)
+          echo "Building IPA from: $APP"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -r "$APP" "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          zip -qr "checkon.ipa" Payload/
+          echo "IPA size: $(du -sh checkon.ipa)"
+          TMPAPP=$(find "$RUNNER_TEMP/Payload" -name "*.app" | head -1)
+          echo "=== IPA codesign check ==="
+          codesign -dvvv "$TMPAPP" 2>&1 | grep -E "(Authority|Identifier|Team)" | head -8 || true
+          echo "=== Uploading ==="
+          xcrun altool --upload-app \
+            -f "$RUNNER_TEMP/checkon.ipa" \
+            --type ios \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID"
