@@ -154,26 +154,35 @@ jobs:
           codesign -d --entitlements :"$RUNNER_TEMP/entitlements.plist" "$APP" 2>/dev/null || true
 
           echo ""
-          echo "=== 문제 유발 파일 정리 (.DS_Store, 심볼릭 링크 확인) ==="
-          find "$APP" -name ".DS_Store" -print -delete 2>/dev/null || true
-          echo "심볼릭 링크:"
-          find "$APP" -type l 2>/dev/null | head -20 || echo "  (없음)"
+          echo "=== 앱 루트 내용물 전체 (무엇이 있는지) ==="
+          ls -la "$APP" | head -60
 
           echo ""
-          echo "=== --deep 단일 패스 서명 (전체 트리 원자적) ==="
+          echo "=== 문제 유발 파일 확인 ==="
+          find "$APP" -name ".DS_Store" 2>/dev/null || echo "  .DS_Store 없음"
+          echo "심볼릭 링크:"
+          find "$APP" -type l 2>/dev/null || echo "  (없음)"
+
+          echo ""
+          echo "=== --deep 단일 패스 서명 ==="
           codesign --force --deep --sign "$IDENTITY" --entitlements "$RUNNER_TEMP/entitlements.plist" --timestamp "$APP" 2>&1 | head -40
 
           echo ""
-          echo "=== DEEP verify (verbose=4) ==="
-          if codesign --verify --deep --strict --verbose=4 "$APP" 2>&1 | tee /tmp/vlog; then
-            echo "DEEP VERIFY 통과 ✅✅✅"
-          else
-            echo "여전히 실패 ❌ — 상세:"
-            cat /tmp/vlog | head -30
-            echo ""
-            echo "=== CodeResources 내 files2 항목 (앞 30줄) ==="
-            /usr/bin/plutil -p "$APP/_CodeSignature/CodeResources" 2>/dev/null | grep -A2 "files2" | head -40 || true
-          fi
+          echo "=== 서명 직후 verify (exit code 정확히 캡처) ==="
+          codesign --verify --strict --verbose=4 "$APP" 2>/tmp/vlog
+          RC=$?
+          echo "--- verify stderr 전체 ---"
+          cat /tmp/vlog
+          echo "--- verify 종료코드: $RC ---"
+
+          echo ""
+          echo "=== 어떤 리소스가 문제인지 (--verbose=4 상세, added/missing/modified) ==="
+          grep -E "(added|missing|modified|invalid|nested)" /tmp/vlog || echo "  (해당 라인 없음)"
+
+          echo ""
+          echo "=== 앱 루트에서 codesign이 예상 못하는 항목 검사 ==="
+          echo "루트의 .bundle 목록:"
+          ls -la "$APP"/*.bundle 2>/dev/null | head -20 || echo "  없음"
 
       - name: Show build errors (on failure)
         if: failure()
