@@ -15,8 +15,9 @@ jobs:
 
       - name: Install CocoaPods
         run: |
-          sudo gem install cocoapods --no-document 2>&1 | tail -5
-          pod install --silent
+          sudo gem install cocoapods --no-document > /dev/null 2>&1
+          pod install > /dev/null 2>&1
+          echo "pod install done"
 
       - name: Remove Pods aggregate framework from build phase
         run: |
@@ -121,6 +122,17 @@ jobs:
             -archivePath "$RUNNER_TEMP/checkon.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
             -exportOptionsPlist ExportOptions.plist
+
+      - name: Verify IPA signing
+        run: |
+          IPA_PATH=$(find "$RUNNER_TEMP/export" -name "*.ipa" | head -1)
+          echo "IPA: $IPA_PATH"
+          cp "$IPA_PATH" /tmp/check.zip
+          unzip -q /tmp/check.zip -d /tmp/ipa_content
+          APP=$(find /tmp/ipa_content/Payload -maxdepth 1 -name "*.app" | head -1)
+          echo "App: $APP"
+          echo "=== Code signature ==="
+          codesign -dv --verbose=4 "$APP" 2>&1
 
       - name: Upload to App Store Connect
         env:
