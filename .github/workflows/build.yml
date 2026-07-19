@@ -42,11 +42,7 @@ jobs:
             -workspace "마음안전365 체크온.xcworkspace" \
             -scheme "마음안전365 체크온" \
             -configuration Release \
-            -archivePath "$RUNNER_TEMP/checkon.xcarchive" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="iPhone Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="MindSafe365 Checkon AppStore" \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}
+            -archivePath "$RUNNER_TEMP/checkon.xcarchive"
 
       - name: Export IPA
         run: |
