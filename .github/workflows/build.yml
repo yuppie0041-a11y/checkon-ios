@@ -18,6 +18,33 @@ jobs:
           sudo gem install cocoapods --no-document
           pod install
 
+      - name: Remove Pods aggregate framework from build phase
+        run: |
+          cat > /tmp/fix_project.rb << 'RUBY'
+          require 'xcodeproj'
+          proj_path = "마음안전365 체크온.xcodeproj"
+          project = Xcodeproj::Project.open(proj_path)
+          target = project.targets.find { |t| t.name == "마음안전365 체크온" }
+          abort "ERROR: target not found" unless target
+          phase = target.frameworks_build_phase
+          before = phase.files.map { |f| f.display_name.to_s }
+          puts "Frameworks before (#{before.count}): #{before.inspect}"
+          to_remove = phase.files.select { |f| f.display_name.to_s =~ /Pods_/ }
+          puts "Removing #{to_remove.count} aggregate framework(s)"
+          to_remove.each do |bf|
+            name = bf.display_name.to_s
+            ref = bf.file_ref
+            bf.remove_from_project
+            begin; ref.remove_from_project; rescue; end
+            puts "  Removed: #{name}"
+          end
+          after = target.frameworks_build_phase.files.map { |f| f.display_name.to_s }
+          puts "Frameworks after (#{after.count}): #{after.inspect}"
+          project.save
+          puts "Project saved OK"
+          RUBY
+          ruby /tmp/fix_project.rb
+
       - name: Import Distribution Certificate
         env:
           P12_BASE64: ${{ secrets.APPLE_CERTIFICATES_P12 }}
