@@ -118,8 +118,11 @@ jobs:
         run: |
           mkdir -p ~/private_keys
           echo "$ASC_KEY_BASE64" | base64 --decode > ~/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          IPA_PATH=$(find "$RUNNER_TEMP/export" -name "*.ipa" | head -1)
+          echo "Found IPA: $IPA_PATH"
+          cp "$IPA_PATH" "$RUNNER_TEMP/checkon.ipa"
           xcrun altool --upload-app \
-            -f "$RUNNER_TEMP/export/마음안전365 체크온.ipa" \
+            -f "$RUNNER_TEMP/checkon.ipa" \
             --type ios \
             --apiKey $ASC_KEY_ID \
             --apiIssuer $ASC_ISSUER_ID
