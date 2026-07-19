@@ -18,13 +18,22 @@ jobs:
           sudo gem install cocoapods --no-document
           pod install
 
-      - name: Diagnostics - Show Pods xcconfig
+      - name: Fix Pods xcconfig - remove aggregate framework reference
         run: |
-          echo "=== Pods release xcconfig ==="
-          cat "Pods/Target Support Files/Pods-마음안전365 체크온/Pods-마음안전365 체크온.release.xcconfig" 2>/dev/null || echo "xcconfig not found"
-          echo ""
-          echo "=== CocoaPods version ==="
-          pod --version
+          XCCONFIG="Pods/Target Support Files/Pods-마음안전365 체크온/Pods-마음안전365 체크온.release.xcconfig"
+          if [ -f "$XCCONFIG" ]; then
+            echo "=== OTHER_LDFLAGS before ==="
+            grep "OTHER_LDFLAGS" "$XCCONFIG" | head -3 || echo "not found"
+            # Remove the Pods aggregate framework that Xcode never builds (not in the dependency graph)
+            # Individual pod frameworks (FirebaseCore etc.) are already linked separately
+            sed -i '' -E 's/ -framework "Pods[^"]*365[^"]*"//g' "$XCCONFIG"
+            sed -i '' -E 's/ -framework Pods[^ ]*365[^ ]*//g' "$XCCONFIG"
+            echo "=== OTHER_LDFLAGS after ==="
+            grep "OTHER_LDFLAGS" "$XCCONFIG" | head -3 || echo "not found"
+          else
+            echo "xcconfig not found at: $XCCONFIG"
+            ls "Pods/Target Support Files/" 2>/dev/null | head -5 || true
+          fi
 
       - name: Import Distribution Certificate
         env:
