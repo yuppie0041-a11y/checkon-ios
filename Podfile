@@ -2,8 +2,8 @@
 platform :ios, '15.0'
 
 target '마음안전365 체크온' do
-  # Comment the next line if you don't want to use dynamic frameworks
-  use_frameworks!
+  # Static frameworks: avoids dynamic Pods____365____ aggregate linking issue in CI
+  use_frameworks! :linkage => :static
 
   # Add the pod for Firebase Cloud Messaging
   pod 'Firebase/Messaging'
