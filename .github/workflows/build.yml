@@ -104,14 +104,38 @@ jobs:
         run: |
           APP=$(find "$RUNNER_TEMP/checkon.xcarchive/Products/Applications" -name "*.app" -maxdepth 1 | head -1)
           echo "App: $APP"
-          echo "=== codesign -dvvv ==="
-          codesign -dvvv "$APP" 2>&1 | head -40 || true
+          echo "=== codesign -dvvv (top-level) ==="
+          codesign -dvvv "$APP" 2>&1 | grep -E "(Authority|TeamIdentifier|Identifier|Signed Time|Timestamp)" | head -20 || true
+
+          echo ""
+          echo "=== DEEP verify (nested 포함 전체 검증) ==="
+          codesign --verify --deep --strict --verbose=4 "$APP" 2>&1 | head -40 || echo "DEEP VERIFY FAILED (위 에러 확인)"
+
+          echo ""
+          echo "=== 번들 내 서명 대상 구성요소 목록 ==="
+          echo "--- Frameworks 폴더 ---"
+          ls -la "$APP/Frameworks" 2>/dev/null || echo "  (Frameworks 폴더 없음 - static linkage 정상)"
+          echo "--- PlugIns 폴더 ---"
+          ls -la "$APP/PlugIns" 2>/dev/null || echo "  (PlugIns 없음)"
+          echo "--- .bundle 리소스 ---"
+          find "$APP" -name "*.bundle" -maxdepth 2 2>/dev/null || echo "  (없음)"
+          echo "--- dylib/framework 파일 ---"
+          find "$APP" \( -name "*.dylib" -o -name "*.framework" \) 2>/dev/null | head -20 || echo "  (없음)"
+
+          echo ""
+          echo "=== 각 nested 구성요소 서명 확인 ==="
+          find "$APP" \( -name "*.framework" -o -name "*.dylib" -o -name "*.appex" -o -name "*.bundle" \) 2>/dev/null | while read comp; do
+            echo "[$comp]"
+            codesign -dvv "$comp" 2>&1 | grep -E "(Authority|not signed|code object)" | head -3 || echo "  서명 확인 불가"
+          done
+
+          echo ""
           echo "=== embedded.mobileprovision ==="
           PP="$APP/embedded.mobileprovision"
           if [ -f "$PP" ]; then
             /usr/bin/security cms -D -i "$PP" 2>/dev/null \
               | /usr/bin/plutil -p - 2>/dev/null \
-              | grep -E '"(Name|TeamName|ProvisionsAllDevices|ProvisionedDevices|get-task-allow)"' \
+              | grep -E '"(Name|TeamName|get-task-allow)"' \
               | head -10 || echo "Could not parse embedded profile"
           else
             echo "embedded.mobileprovision NOT FOUND"
