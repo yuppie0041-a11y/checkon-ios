@@ -100,6 +100,23 @@ jobs:
             -archivePath "$RUNNER_TEMP/checkon.xcarchive" \
             2>&1 | tee "$RUNNER_TEMP/build.log"
 
+      - name: Check archive signing
+        run: |
+          APP=$(find "$RUNNER_TEMP/checkon.xcarchive/Products/Applications" -name "*.app" -maxdepth 1 | head -1)
+          echo "App: $APP"
+          echo "=== codesign -dvvv ==="
+          codesign -dvvv "$APP" 2>&1 | head -40 || true
+          echo "=== embedded.mobileprovision ==="
+          PP="$APP/embedded.mobileprovision"
+          if [ -f "$PP" ]; then
+            /usr/bin/security cms -D -i "$PP" 2>/dev/null \
+              | /usr/bin/plutil -p - 2>/dev/null \
+              | grep -E '"(Name|TeamName|ProvisionsAllDevices|ProvisionedDevices|get-task-allow)"' \
+              | head -10 || echo "Could not parse embedded profile"
+          else
+            echo "embedded.mobileprovision NOT FOUND"
+          fi
+
       - name: Show build errors (on failure)
         if: failure()
         run: |
