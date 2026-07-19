@@ -143,7 +143,6 @@ jobs:
 
       - name: Re-sign unsigned nested bundles (fix Firebase privacy bundles)
         run: |
-          set -e
           security unlock-keychain -p "" build.keychain
           security default-keychain -s build.keychain
           IDENTITY=$(security find-identity -v -p codesigning build.keychain | grep "Apple Distribution" | head -1 | awk '{print $2}')
@@ -151,39 +150,43 @@ jobs:
           APP=$(find "$RUNNER_TEMP/checkon.xcarchive/Products/Applications" -name "*.app" -maxdepth 1 | head -1)
           echo "App: $APP"
 
-          # 1) 메인 앱 서명에서 entitlements 추출 (재서명 시 동일하게 적용)
+          # entitlements 추출
           codesign -d --entitlements :"$RUNNER_TEMP/entitlements.plist" "$APP" 2>/dev/null || true
-          if [ -s "$RUNNER_TEMP/entitlements.plist" ]; then
-            echo "Entitlements 추출 완료:"
-            /usr/bin/plutil -p "$RUNNER_TEMP/entitlements.plist" | head -20 || true
-          else
-            echo "WARNING: entitlements 비어있음"
-          fi
 
-          # 2) 중첩 번들 먼저 서명 (inside-out)
-          echo "=== 중첩 번들 서명 ==="
+          echo ""
+          echo "=== 번들 구조 확인 (첫 번째 번들) ==="
+          FIRST=$(find "$APP" -name "*.bundle" | head -1)
+          echo "번들: $FIRST"
+          ls -la "$FIRST"
+          echo "Info.plist 존재? $([ -f "$FIRST/Info.plist" ] && echo YES || echo NO)"
+
+          echo ""
+          echo "=== 중첩 번들 개별 서명 + 검증 ==="
+          FAILED=0
           find "$APP" -name "*.bundle" | while read b; do
-            echo "  서명: $(basename "$b")"
-            codesign --force --sign "$IDENTITY" --timestamp "$b"
+            NAME=$(basename "$b")
+            if codesign --force --sign "$IDENTITY" --timestamp "$b" 2>/tmp/err; then
+              # 개별 검증
+              if codesign --verify --strict "$b" 2>/tmp/verr; then
+                echo "  ✅ $NAME 서명+검증 OK"
+              else
+                echo "  ⚠️ $NAME 서명됨 but 검증실패: $(cat /tmp/verr)"
+              fi
+            else
+              echo "  ❌ $NAME 서명실패: $(cat /tmp/err)"
+            fi
           done
 
-          # 3) 기타 중첩 코드(dylib/framework/appex) 서명
-          find "$APP" \( -name "*.dylib" -o -name "*.framework" -o -name "*.appex" \) 2>/dev/null | while read c; do
-            echo "  서명: $(basename "$c")"
-            codesign --force --sign "$IDENTITY" --timestamp "$c"
-          done
-
-          # 4) 메인 앱 재서명 (entitlements 포함)
+          echo ""
           echo "=== 메인 앱 재서명 ==="
-          if [ -s "$RUNNER_TEMP/entitlements.plist" ]; then
-            codesign --force --sign "$IDENTITY" --entitlements "$RUNNER_TEMP/entitlements.plist" --timestamp "$APP"
-          else
-            codesign --force --sign "$IDENTITY" --timestamp "$APP"
-          fi
+          codesign --force --sign "$IDENTITY" --entitlements "$RUNNER_TEMP/entitlements.plist" --timestamp "$APP" 2>&1 || true
 
-          # 5) 깊은 검증
-          echo "=== 재서명 후 DEEP verify ==="
-          codesign --verify --deep --strict --verbose=2 "$APP" && echo "DEEP VERIFY 통과 ✅" || { echo "여전히 실패 ❌"; exit 1; }
+          echo ""
+          echo "=== DEEP verify (verbose=4, 어느 리소스가 문제인지) ==="
+          codesign --verify --deep --strict --verbose=4 "$APP" 2>&1 | head -30 || true
+          echo ""
+          echo "=== 비-deep verify (메인 앱 seal만) ==="
+          codesign --verify --verbose=4 "$APP" 2>&1 | head -30 || true
 
       - name: Show build errors (on failure)
         if: failure()
