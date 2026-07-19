@@ -168,21 +168,21 @@ jobs:
           codesign --force --deep --sign "$IDENTITY" --entitlements "$RUNNER_TEMP/entitlements.plist" --timestamp "$APP" 2>&1 | head -40
 
           echo ""
-          echo "=== 서명 직후 verify (exit code 정확히 캡처) ==="
-          codesign --verify --strict --verbose=4 "$APP" 2>/tmp/vlog
-          RC=$?
-          echo "--- verify stderr 전체 ---"
-          cat /tmp/vlog
+          echo "=== 서명 직후 verify (출력 전체 캡처) ==="
+          RC=0
+          codesign --verify --strict --verbose=4 "$APP" > /tmp/vout 2>&1 || RC=$?
           echo "--- verify 종료코드: $RC ---"
+          echo "--- verify 출력 전체 ---"
+          cat /tmp/vout
 
           echo ""
-          echo "=== 어떤 리소스가 문제인지 (--verbose=4 상세, added/missing/modified) ==="
-          grep -E "(added|missing|modified|invalid|nested)" /tmp/vlog || echo "  (해당 라인 없음)"
+          echo "=== Entitlements 폴더 내용 (앱 루트의 비정상 항목) ==="
+          find "$APP/Entitlements" -type f 2>/dev/null | head -10 || echo "  없음"
+          ls -laR "$APP/Entitlements" 2>/dev/null | head -20 || true
 
           echo ""
-          echo "=== 앱 루트에서 codesign이 예상 못하는 항목 검사 ==="
-          echo "루트의 .bundle 목록:"
-          ls -la "$APP"/*.bundle 2>/dev/null | head -20 || echo "  없음"
+          echo "=== CodeResources에서 Entitlements 관련 항목 ==="
+          grep -A3 -i "entitlements" "$APP/_CodeSignature/CodeResources" 2>/dev/null | head -30 || echo "  없음"
 
       - name: Show build errors (on failure)
         if: failure()
