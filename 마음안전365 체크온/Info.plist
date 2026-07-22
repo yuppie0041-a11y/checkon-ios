@@ -99,6 +99,10 @@
 	<key>WKAppBoundDomains</key>
 	<array>
 		<string>checkon.mindsafe365.co.kr</string>
+		<string>kakao.com</string>
+		<string>naver.com</string>
+		<string>google.com</string>
+		<string>apple.com</string>
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>

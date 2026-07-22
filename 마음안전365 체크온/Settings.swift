@@ -16,7 +16,9 @@ let allowedOrigins: [String] = ["checkon.mindsafe365.co.kr"]
 
 // auth origins will open in modal and show toolbar for back into the main origin.
 // These should also appear in Info.plist
-let authOrigins: [String] = []
+// 소셜 로그인(카카오·네이버·구글·Apple) OAuth 흐름이 메인 웹뷰 안에서 완결되도록 허용
+// (비어 있으면 OAuth 이동이 차단/외부 Safari로 튕겨 로그인 후 앱으로 못 돌아옴 — 심사 반려 2.1(a) 원인)
+let authOrigins: [String] = ["kakao.com", "naver.com", "google.com", "apple.com"]
 // allowedOrigins + authOrigins <= 10
 
 let platformCookie = Cookie(name: "app-platform", value: "iOS App Store")
